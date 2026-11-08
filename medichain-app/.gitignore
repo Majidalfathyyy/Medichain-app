@@ -1,0 +1,10 @@
+.env
+*.db
+.medichain-postgres/
+.mockchain.json
+__pycache__/
+.pytest_cache/
+.task-temp/
+node_modules/
+.next/
+out/

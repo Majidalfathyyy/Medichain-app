@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: medichain
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?isi di .env}
+      POSTGRES_DB: medichain
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medichain -d medichain"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    # port tidak dibuka ke host: hanya backend yang boleh mengakses
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://medichain:${POSTGRES_PASSWORD}@db:5432/medichain
+      MOCK_CHAIN_FILE: /data/mockchain.json
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes: [chaindata:/data]
+    # Expose only to the local machine so a locally run Next.js dev server
+    # on port 3000 can proxy API requests to the same backend as Docker web.
+    ports: ["127.0.0.1:8001:8000"]
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        API_ORIGIN: http://api:8000
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+    environment:
+      API_ORIGIN: http://api:8000
+      NODE_ENV: production
+    depends_on: [api]
+    ports: ["127.0.0.1:8000:3000"]
+volumes:
+  pgdata:
+  chaindata:

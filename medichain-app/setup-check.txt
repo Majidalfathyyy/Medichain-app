@@ -1,0 +1,300 @@
+]633;E;{   for file in README.md package.json frontend/package.json requirements.txt pyproject.toml docker-compose.yml Dockerfile Dockerfile.web .env.example .mockchain.json\x3b do     if [ -f "$file" ]\x3b then       printf '\\n========== %s ==========\\n' "$file"\x3b       cat "$file"\x3b     fi\x3b   done\x3b } > setup-check.txt;106af1c5-b641-4ebd-9b1d-c3c5f9ec0ab6]633;C
+========== README.md ==========
+# MediChain (front end + back end)
+
+Prototipe proposal *MediChain: Platform Rekam Medis Terintegrasi Berbasis Blockchain* (IEIC 2026, IT Healthcare).
+Satu proyek: dasbor web dengan **form login per peran** + API FastAPI + PostgreSQL (off-chain) + smart contract Solidity (on-chain, hanya hash dan metadata). Semua data **sintetis**.
+
+## Struktur
+| Path | Isi |
+|---|---|
+| `app/page.tsx`, `app/globals.css` | Aplikasi Next.js + React, portal peran dan ruang kerja responsif |
+| `frontend/` | Antarmuka HTML lama, masih tersedia di endpoint `/app/` |
+| `app/main.py` | Endpoint REST, autentikasi, RBAC, header keamanan, penyajian frontend |
+| `app/hashing.py` | Hash kanonik SHA-256 (+salt) dan audit log berantai |
+| `app/chain.py`, `app/chain_ops.py` | `MockChain`, `Web3Chain` (Sepolia), serta outbox transaksi yang bisa dicoba ulang |
+| `app/security.py` | scrypt, JWT, rate limiter |
+| `contracts/MediChain.sol` | Smart contract: registerRecord, updateRecord, verifyRecord, grant/revokeAccess, event |
+| `scripts/seed.py` | 3 akun staf demo; pasien ditambahkan dari aplikasi |
+| `scripts/seed_demo_clinic.py` | Menambah dokter spesialis dan pasien demo sintetis secara idempoten |
+| `tests/` | `test_core.py` (logika inti), `test_api.py` (end-to-end) |
+| `demo-standalone/index.html` | Simulasi mandiri tanpa backend (cukup buka di browser), cadangan bila server tidak bisa dijalankan |
+
+## Menjalankan (mode mock, tanpa blockchain sungguhan)
+```bash
+pip install -r requirements.txt
+cp .env.example .env                       # CHAIN_MODE=mock; untuk demo set ENABLE_TAMPER_SIM=true
+export SEED_PASSWORD='Demo-Medichain-2026' # hanya untuk dev; kalau kosong dibuat acak dan dicetak
+set -a; . ./.env; set +a                   # muat .env ke environment (atau set variabelnya manual)
+python -m scripts.seed
+uvicorn app.main:app --reload
+```
+Buka **http://localhost:8000/** lalu pilih peran di form login. Docker Compose menyajikan Next.js di port 8000 dan API tetap berada di jaringan internal. Untuk pengembangan lokal, jalankan API di port 8000 dan Next.js dengan `npm install` lalu `npm run dev` (port 3000). Dokumentasi API lokal: `http://localhost:8000/docs` (hanya non-production).
+PostgreSQL adalah satu-satunya database aplikasi; SQLite hanya dipakai untuk database tes terisolasi. Compose menyimpan PostgreSQL pada volume persisten `pgdata`. Isi `POSTGRES_PASSWORD` dan `JWT_SECRET` di `.env`, lalu jalankan `docker compose up --build -d`.
+
+### Memindahkan database SQLite lama ke PostgreSQL
+Skrip migrasi membaca `medichain_dev.db` secara read-only dan menyalin semua tabel yang dikenal aplikasi. Buat salinan cadangan file SQLite terlebih dahulu. Pastikan layanan API berhenti menulis selama migrasi dan PostgreSQL tujuan sudah berjalan:
+
+```powershell
+Copy-Item .\medichain_dev.db .\medichain_dev.backup.db
+docker compose stop api web
+docker compose up -d db
+docker compose build api
+docker compose run --rm --volume "${PWD}/medichain_dev.db:/migration/medichain_dev.db:ro" api python -m scripts.migrate_sqlite_to_postgres --source /migration/medichain_dev.db
+docker compose up --build -d api web
+```
+
+Migrasi berhenti tanpa mengubah PostgreSQL jika database tujuan sudah berisi data. Periksa cadangan dan isi database tujuan sebelum menjalankan ulang dengan opsi `--merge`; opsi ini memperbarui baris yang primary key-nya sama dengan data SQLite. Migrasi tidak menghapus file SQLite atau volume PostgreSQL.
+
+## Akun demo dan hak tiap peran
+| Peran | Username | Dapat melakukan |
+|---|---|---|
+| Admin | `admin1` | Kelola pengguna, tagihan, status perawatan, jadwal, tracking perjalanan pasien, audit trail, dan verifikasi integritas |
+| Dokter | `dokter1` | Baca rekam yang diizinkan, lengkapi diagnosis dan catatan klinis, lihat ECG dan tagihan; integritas hanya baca |
+| Pasien | dibuat admin/auditor | Baca rekam medis, ECG, status perawatan, jadwal, dan tagihan miliknya |
+| Auditor | `auditor1` | Kelola pengguna dan kata sandi, tagihan, kontrol akses, verifikasi integritas, dan audit trail |
+
+Jadwal langsung dapat dibuat, diubah, dan dihapus oleh admin/dokter. Pasien mengajukan tanggal melalui permohonan; jadwal diterbitkan setelah dokter dan admin sama-sama menyetujui. Perubahan ACL hanya dapat dilakukan auditor. Saat pasien masuk rawat inap, dokter penanggung jawab dipilih otomatis menurut diagnosis dan spesialisasi, lalu tetap sama sampai pasien keluar. ECG hanya tersedia saat rawat inap atau pemulihan setelah operasi.
+
+Password akun staf demo = nilai `SEED_PASSWORD`. Pasien pertama dibuat oleh admin/auditor dari menu Pengguna. Form login cukup meminta username dan password; peran akun dikenali otomatis dari database setelah autentikasi berhasil.
+
+### Pendaftaran pasien mandiri
+Pendaftaran pasien lewat email dan OTP sementara dinonaktifkan. Admin atau auditor membuat akun pasien dari menu Pengguna. Jalur OTP dapat diaktifkan kembali secara eksplisit lewat `ENABLE_EMAIL_OTP_REGISTRATION=true` setelah layanan email siap. Google Sign-In merupakan jalur terpisah dan tetap opsional; jika dikonfigurasi, backend memverifikasi ID token, lalu pasien baru melengkapi tanggal lahir, jenis kelamin, alamat, dan telepon sebelum rekam awal dibuat.
+
+Fitur email dan Google memerlukan kredensial dari administrator sebelum digunakan:
+
+* SMTP/OTP tidak diperlukan saat pendaftaran OTP dinonaktifkan. Jika jalur ini diaktifkan kembali, atur `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, dan `OTP_SECRET` dalam `.env`. Untuk layanan SMTP dengan STARTTLS gunakan port 587; untuk SSL langsung gunakan port 465. Gunakan app password atau kredensial SMTP khusus, bukan kata sandi akun email utama.
+* Buat OAuth client bertipe **Web application** di Google Cloud Console, tambahkan origin aplikasi (contoh `http://localhost:3000`), lalu isi `GOOGLE_CLIENT_ID` dan `NEXT_PUBLIC_GOOGLE_CLIENT_ID` dengan client ID yang sama. Ikuti panduan resmi [membuat Google client ID](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid); server juga memverifikasi ID token sebelum membuat sesi. Setelah mengubah nilai, mulai ulang Next.js atau rebuild Docker.
+* Tanpa client ID, Google Sign-In tidak ditampilkan. Untuk saat ini pasien dibuat oleh admin/auditor.
+
+Menu **Terapi & pemeriksaan** mencatat alergi, instruksi obat, dan permintaan laboratorium/radiologi. Dokter yang memiliki akses klinis dapat menulis dan memperbarui catatan; pasien, admin, dan auditor hanya membaca sesuai ACL. Data detail tetap di PostgreSQL. Perubahan membuat jejak aktivitas dan sidik jari timeline masuk ke outbox blockchain. Ekspor FHIR lengkap menyertakan AllergyIntolerance, MedicationRequest, dan ServiceRequest.
+
+Untuk menambahkan contoh dokter spesialis dan pasien sintetis ke database dev yang sedang dipakai, jalankan `python -m scripts.seed_demo_clinic`. Script aman dijalankan ulang dan hanya menambahkan akun yang belum ada. Username pasien dan dokter dibuat sederhana dari nama, misalnya `abrar.arrazzaq` atau `bima.setiawan`; password demo dibentuk dari nama tanpa spasi ditambah tanggal dan bulan lahir (`DDMM`). Kredensial baru dicetak oleh script. Data dan password ini hanya untuk demo lokal, jangan digunakan untuk akun nyata.
+
+## Alur demo untuk presentasi
+1. Masuk sebagai **dokter**, ubah catatan, simpan, lihat versi naik jadi v2.
+2. Masuk sebagai **admin**, buka Simulasi Tampering, ubah diagnosis, lalu Jalankan verifikasi: status Termodifikasi, hash tidak cocok.
+3. Masuk lagi sebagai **dokter**, coba simpan: ditolak (409) karena data tidak cocok dengan hash on-chain.
+4. Masuk sebagai **auditor**, buka Audit Trail: semua kejadian tercatat dan rantai log utuh.
+5. Masuk sebagai **pasien**: hanya rekam miliknya yang tampil. Upaya membuka rekam lain lewat API ditolak dan tercatat sebagai AccessLogged.
+6. Masuk sebagai admin/auditor untuk menambah akun beserta profil, lalu buat tagihan dan tanggal jatuh tempo. Pasien dan dokter hanya dapat melihat tagihan yang menjadi hak aksesnya.
+
+## Menyambungkan ke Ethereum testnet
+Langkah deployment lewat Remix dan konfigurasi `.env` tersedia di [SEPOLIA_SETUP.md](SEPOLIA_SETUP.md).
+1. Buat akun khusus testnet Sepolia. Jangan gunakan atau membagikan private key akun mainnet.
+2. Deploy `contracts/MediChain.sol` ke Sepolia dengan Remix atau Hardhat (compiler Solidity 0.8.20+). Akun deployer otomatis menjadi owner dan writer.
+3. Salin `.env.sepolia.example` menjadi `.env`, lalu isi RPC URL, alamat kontrak, private key akun Sepolia, dan rahasia JWT. Jika backend memakai akun berbeda dari deployer, owner harus memanggil `setWriter(backendAddress, true)`.
+4. API memeriksa koneksi RPC, chain ID, bytecode kontrak, dan status writer ketika Web3 dipakai. Untuk Sepolia gunakan `CHAIN_ID=11155111`.
+5. Jalankan `docker compose up --build`. Web Next.js menerima `API_ORIGIN` sebagai build arg agar proxy `/api` menunjuk ke container API. Halaman Integritas menampilkan jaringan dan tautan transaksi.
+
+ETH testnet hanya untuk pengujian dan tidak setara dengan ETH mainnet. Hash yang ditulis ke blockchain bersifat publik dan tidak dapat dihapus; jangan menulis data identitas, diagnosis, atau ECG mentah ke kontrak. Pastikan semua data demo bersifat sintetis.
+
+## Endpoint
+| Metode | Path | Peran |
+|---|---|---|
+| POST | `/auth/login` | publik (dibatasi laju) |
+| GET | `/me` | semua |
+| GET/POST | `/records` | baca sesuai izin / dokter |
+| GET/PUT | `/records/{id}` | baca sesuai izin / dokter |
+| GET | `/records/{id}/ecg?start=&duration=` | baca sesuai izin |
+| POST | `/records/{id}/verify` | admin, auditor |
+| GET | `/records/{id}/integrity` | baca sesuai izin (tanpa menjalankan verifikasi/audit) |
+| GET/POST | `/chain/status`, `/chain/sync` | admin, auditor; status dan retry outbox blockchain |
+| GET/POST/PUT/DELETE | `/users` dan `/users/{id}` | admin, auditor; buat, kelola, dan hapus akun serta kata sandi |
+| GET/POST/PUT/DELETE | `/invoices` dan `/invoices/{id}` | admin, auditor (kelola); dokter (baca sesuai izin); pasien (baca tagihan sendiri) |
+| GET/PUT | `/records/{id}/access[/{role}]` | admin/auditor (baca) / auditor (ubah) |
+| GET/PUT | `/care[/{id}]` | semua (baca sesuai izin) / admin dan dokter (ubah) |
+| GET/POST/PUT/DELETE | `/appointments` | admin dan dokter; pasien (baca jadwal miliknya) |
+| GET/POST | `/appointment-requests` | pasien (buat/baca miliknya); admin dan dokter (tinjau) |
+| GET | `/audit`, `/audit/verify` | admin, auditor |
+| GET | `/tracking?patient_id={id}` | admin (riwayat aktivitas pasien dan dokter penanggung jawab) |
+| GET | `/records/{id}/fhir?scope=summary\|full` | ekspor FHIR Bundle untuk pengguna yang punya akses rekam |
+| GET/POST | `/records/{id}/observations` | baca sesuai akses / dokter yang ditugaskan (catat tanda vital) |
+| GET | `/records/{id}/alerts` | peringatan alur kerja yang dapat ditinjau tenaga klinis |
+| GET | `/records/{id}/timeline` | riwayat aktivitas, fingerprint snapshot, status rantai audit dan anchor |
+| POST | `/records/{id}/timeline/anchor` | admin/auditor; jangkar snapshot riwayat ke event blockchain |
+| GET/POST/DELETE | `/records/{id}/shares[/{share_id}]` | pasien pemilik rekam; buat tautan/QR, lihat riwayat akses, cabut tautan |
+| POST | `/share/access` | publik dengan token bearer terbatas waktu; membuka Bundle yang disetujui pasien |
+| POST | `/dev/tamper/{id}` | admin, hanya bila `ENABLE_TAMPER_SIM=true` |
+
+Ekspor menggunakan struktur FHIR R4 Bundle berisi sumber klinis, status perawatan, dan observasi vital bila scope lengkap dipilih. Sidik jari ekspor menghitung konten Bundle sebelum extension bukti ditambahkan; status integritas sumber dan versi chain disertakan sebagai extension MediChain. Token berbagi 256-bit hanya diberikan saat pembuatan, disimpan sebagai SHA-256 di database, ditaruh pada fragmen URL (`#token`) agar tidak terkirim dalam request halaman, kedaluwarsa dalam 10 menit–7 hari, dan dapat dicabut pasien. QR dibuat secara lokal dari dependensi `qrcode`; atur `PUBLIC_APP_URL` untuk host publik. Timeline snapshot di-hash dengan salt rekam yang tidak dibagikan, lalu dicatat sebagai hash 32-byte pada event `AccessLogged`; aktivitas lama bisa dijangkar oleh admin/auditor. Peringatan hanya menandai kelengkapan alur (diagnosis belum diisi, observasi belum dicatat pada episode inap, jadwal terlewat, atau integritas belum valid), bukan diagnosis atau rekomendasi medis.
+
+Alur verifikasi: hitung ulang hash dari PostgreSQL, bandingkan dengan `getRecord` di smart contract, kembalikan `valid` / `modified` / `not_registered`.
+Perubahan rekam dan ACL lebih dulu disimpan bersama operasi outbox di database, kemudian dikirim ke chain. Jika RPC gagal, status menjadi pending; admin/auditor dapat melihatnya melalui `/chain/status` dan mencoba ulang lewat `POST /chain/sync` atau tombol Sinkronkan transaksi pada menu Integritas. Hash versi lama yang sudah dikirim ke chain tetap immutable.
+
+## Kontrol keamanan
+| Ancaman | Kontrol |
+|---|---|
+| Data DB diubah diam-diam | Hash SHA-256 on-chain; verifikasi terpisah untuk rekam dan ECG |
+| Tebak isi rekam dari hash on-chain | Salt acak 128 bit per rekam disimpan off-chain; di chain hanya hash dan pengenal turunan (bukan UUID) |
+| "Mencuci" data yang sudah diubah lewat update sah | `PUT` ditolak (409) bila hash lokal tidak cocok dengan on-chain |
+| Pencurian kredensial | scrypt (n=2^14), verifikasi waktu-konstan, pesan galat seragam, kunci akun 15 menit setelah 5 gagal, rate limit login |
+| Token dicuri / peran dicabut | JWT HS256 berumur 30 menit, `iss`/`exp` wajib; peran dibaca dari DB tiap request |
+| Akses tanpa hak | RBAC + ACL per rekam; pasien hanya rekam miliknya; penolakan dicatat (DB dan event `AccessLogged`) |
+| Log audit diubah | Log berantai hash (`/audit/verify`); log on-chain sebagai pembanding |
+| Pengurasan gas lewat spam akses ditolak | Log on-chain penolakan dibatasi 1 per menit per (user, rekam) |
+| Kunci backend bocor | Contract punya `setWriter` dan `setPaused`; kunci hanya akun testnet |
+| Injeksi dan input liar | Pydantic dengan batas panjang dan pola; SQLAlchemy ber-parameter |
+| Kebocoran konfigurasi | Rahasia hanya dari env; production menolak start tanpa `JWT_SECRET` kuat; `/docs` mati di production |
+| Browser/XSS/clickjacking | `nosniff`, `X-Frame-Options`, CSP `default-src 'none'`, `no-store`, HSTS (production), CORS dibatasi |
+| Privasi | Data profil disimpan di PostgreSQL; data klinis memakai pengenal pseudonim; salt tidak pernah dikirim ke klien; kontainer non-root; port DB tidak dibuka |
+
+## Batasan yang perlu dinyatakan jujur
+- Prototipe, bukan sistem klinis. Belum diaudit pihak ketiga (termasuk smart contract) dan belum ada uji penetrasi.
+- Pemegang kunci backend tetap bisa menulis hash baru. Verifikasi membuktikan data DB sama dengan yang dicatat, bukan bahwa pencatat jujur.
+- Audit log berantai mendeteksi perubahan di tengah rantai, tetapi tidak mendeteksi pemotongan ekor. Perbaikan lanjutan: jangkarkan hash ujung rantai ke blockchain secara berkala.
+- Rate limiter dan lock berada di memori satu proses; multi-instance perlu Redis.
+- Komit DB dan transaksi chain tidak atomik. Jika commit gagal setelah chain sukses, ada hash yatim; solusinya pola outbox.
+- Tabel dibuat otomatis untuk dev; production perlu migrasi Alembic. ECG demo dibuat sintetis pada 250 Hz dengan gelombang P-QRS-T, variasi interval detak, pergeseran baseline, dan derau ringan. Ini hanya visualisasi simulasi, bukan data alat atau alat bantu diagnosis; ganti dengan segmen MIT-BIH (paket `wfdb`) jika dibutuhkan untuk riset.
+
+- Token JWT disimpan di `sessionStorage` agar sesi bertahan saat halaman dimuat ulang pada tab yang sama; menutup tab mengakhiri sesi browser. Tidak ada logout sisi server (token stateless, berumur 30 menit).
+- Next.js production build berhasil dan berkas Python berhasil dikompilasi. **Belum dijalankan:** alur API terhadap database aktif, tampilan interaktif di browser, build Docker, dan kompilasi/deploy Solidity.
+- Purge pasien Versi 1 tersedia sebagai pratinjau melalui `python -m scripts.purge_v1_patients`; gunakan `--execute` hanya setelah `DATABASE_URL` dipastikan menunjuk ke database Versi 1 yang benar. Catatan immutable di blockchain tidak dapat dihapus.
+
+========== package.json ==========
+{
+  "name": "medichain-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0"
+  },
+  "dependencies": {
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.8.0"
+  },
+  "overrides": {
+    "postcss": "^8.5.23"
+  }
+}
+
+========== requirements.txt ==========
+fastapi>=0.110,<1
+uvicorn[standard]>=0.29
+sqlalchemy>=2.0,<3
+psycopg[binary]>=3.1
+pydantic>=2.6,<3
+pyjwt>=2.7,<3
+web3>=6.15,<8
+qrcode>=7.4,<9
+reportlab>=4.0,<5
+python-dotenv>=1.0,<2
+google-auth>=2.0,<3
+# dev: pytest, httpx
+
+========== docker-compose.yml ==========
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: medichain
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?isi di .env}
+      POSTGRES_DB: medichain
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medichain -d medichain"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    # port tidak dibuka ke host: hanya backend yang boleh mengakses
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://medichain:${POSTGRES_PASSWORD}@db:5432/medichain
+      MOCK_CHAIN_FILE: /data/mockchain.json
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes: [chaindata:/data]
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        API_ORIGIN: http://api:8000
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+    environment:
+      API_ORIGIN: http://api:8000
+      NODE_ENV: production
+    depends_on: [api]
+    ports: ["127.0.0.1:8000:3000"]
+volumes:
+  pgdata:
+  chaindata:
+
+========== Dockerfile ==========
+FROM python:3.12-slim
+RUN useradd -m -u 10001 app && mkdir /data && chown app /data
+WORKDIR /srv
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app app
+COPY scripts scripts
+COPY frontend frontend
+USER app
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+========== Dockerfile.web ==========
+FROM node:22-alpine
+WORKDIR /srv
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY app ./app
+COPY next.config.ts tsconfig.json ./
+ARG API_ORIGIN=http://api:8000
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+ENV API_ORIGIN=${API_ORIGIN}
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+ENV NODE_ENV=production
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "run", "start"]
+
+========== .env.example ==========
+APP_ENV=development            # production => JWT_SECRET wajib, /docs mati, HSTS aktif
+DATABASE_URL=postgresql+psycopg://medichain:ganti-password@localhost:5432/medichain
+JWT_SECRET=                    # isi: python -c "import secrets;print(secrets.token_urlsafe(48))"
+JWT_EXPIRE_MINUTES=30
+CORS_ORIGINS=http://localhost:3000
+PUBLIC_APP_URL=http://localhost:8000
+CHAIN_MODE=mock                # mock | web3
+# Web3 / Sepolia (aktifkan dengan CHAIN_MODE=web3)
+CHAIN_ID=11155111
+CHAIN_NAME=Sepolia
+BLOCK_EXPLORER_TX_BASE=https://sepolia.etherscan.io/tx/
+# --- hanya untuk CHAIN_MODE=web3 (akun TESTNET khusus, jangan pernah dana nyata) ---
+RPC_URL=
+CONTRACT_ADDRESS=
+CHAIN_PRIVATE_KEY=
+ENABLE_TAMPER_SIM=false        # true hanya untuk demo; ditolak di production
+POSTGRES_PASSWORD=ganti-password
+SEED_PASSWORD=
+# Email OTP patient registration is temporarily disabled; keep false unless deliberately re-enabled.
+ENABLE_EMAIL_OTP_REGISTRATION=false
+# SMTP settings are only used if email OTP registration is re-enabled.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=
+SMTP_USE_TLS=true
+OTP_SECRET=                   # use a separate random secret in production
+# Google Identity Services (same OAuth Web client ID for backend and Next.js)
+GOOGLE_CLIENT_ID=
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+
+========== .mockchain.json ==========
+{"recs": {"db25ba7cef164c68932a31aff3484ca2720d80127899b7252bed0e06a6a0e584": {"hr": "d1e187b74020bce2c306b100b6cb336726817f901798f0f791bea2f9694e438d", "he": "339568edd3bb029e4b2486ca892bdd06c440243508af303fe88ea9c76f0a7131", "v": 2, "ts": 1792332502}, "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3": {"hr": "5f2c544dedfd9e1ce1d7fc8b08ff3208632bf967ff5563474df88957aefbde7b", "he": "8d998540499d7b5a9dcaa58cfbf6a2233adeba25b50fe4284f874feaaacf9df0", "v": 5, "ts": 1792343824}, "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242": {"hr": "e5a0271285353df07ea23ba7e65c4524b691c80c72985ac8fb1462fe3c06018b", "he": "316d418d689ce46046b54da512ea4882496cdf135731cea1b6d9719de4fd470a", "v": 3, "ts": 1792345251}, "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17": {"hr": "d7599a1f8e37cf0811fa720be9f79c713bd6e9344ea8a9811f6895016d76cc91", "he": "24ed872b185689bc173bef4285f295acfda5b0edf21d186245f848e3b9a7bd31", "v": 3, "ts": 1792612897}}, "txs": [{"tx": "08d15ac60ac7156e9ad92ecd065c4629fe10a28fb9fbb047086e3ce5a3fb8905", "kind": "RecordRegistered", "key": "db25ba7cef164c68932a31aff3484ca2720d80127899b7252bed0e06a6a0e584", "block": 1000000}, {"tx": "de75b3820c5e023bf4a3846b42fa68f64fa1f981d9f0faf67eff02a69a7bf10b", "kind": "AccessGranted", "key": "db25ba7cef164c68932a31aff3484ca2720d80127899b7252bed0e06a6a0e584", "block": 1000001}, {"tx": "d03d3eb36a9548e8864e93b484c35574e81dcc0ff74198a2906c6ebdae12b207", "kind": "AccessGranted", "key": "db25ba7cef164c68932a31aff3484ca2720d80127899b7252bed0e06a6a0e584", "block": 1000002}, {"tx": "1ab2b6ec211063f83d245697c158448ed092bcd209ee319ddbe0de7c0f09be21", "kind": "AccessGranted", "key": "db25ba7cef164c68932a31aff3484ca2720d80127899b7252bed0e06a6a0e584", "block": 1000003}, {"tx": "fb7c7b2d11663aefa1d7cf8c2147583670d91695f5654c7f34e497b04fae6ddb", "kind": "RecordUpdated", "key": "db25ba7cef164c68932a31aff3484ca2720d80127899b7252bed0e06a6a0e584", "block": 1000004}, {"tx": "ede95369308b5801e42a5b6e848882ac8106ae57e9e42fdeb3bd95ac7c07b119", "kind": "AccessRevoked", "key": "025f69b41ed29ae279c412527a80977ad1070f9df210151c064c0138b0959dc5", "block": 1000005}, {"tx": "361073d85575ff9e97a5c030d8004b3fd528e1a5db0a2b98c32dabb325a9132b", "kind": "AccessRevoked", "key": "025f69b41ed29ae279c412527a80977ad1070f9df210151c064c0138b0959dc5", "block": 1000006}, {"tx": "38994b0f3f6bb720e58fba35930d9a73177a9b7e446a35c2ef9653c5a844fe14", "kind": "AccessRevoked", "key": "025f69b41ed29ae279c412527a80977ad1070f9df210151c064c0138b0959dc5", "block": 1000007}, {"tx": "c912bed4ef0b62ee09d8b0b0355d4a09551d8be179546339126965917b60f3c6", "kind": "AccessRevoked", "key": "d992583aa5c3d865e83f3a00ec497c83fc87ec74c408b0e97f492c1deb915cff", "block": 1000008}, {"tx": "a62e2a25cb5484f1244b1280a5c73e8b36a5d529f1ed22d7922d9c61472755c9", "kind": "AccessRevoked", "key": "d992583aa5c3d865e83f3a00ec497c83fc87ec74c408b0e97f492c1deb915cff", "block": 1000009}, {"tx": "48da5d251b0fe930e15aee90ba4733d734c43f584b0779a8ba96af5f15c2d42c", "kind": "AccessRevoked", "key": "3b14416a2263660241ee5acd4c5bac6da9e218601afcc40b841c561ca850dd8b", "block": 1000010}, {"tx": "8557327c56f656aea2a79c870a848d407e83b7db18b157568c0b4046d6331843", "kind": "AccessRevoked", "key": "3b14416a2263660241ee5acd4c5bac6da9e218601afcc40b841c561ca850dd8b", "block": 1000011}, {"tx": "b349d8a72c7815afbb5a427278b665eec7504f2f9f3c021352e08046513398ae", "kind": "AccessRevoked", "key": "3b14416a2263660241ee5acd4c5bac6da9e218601afcc40b841c561ca850dd8b", "block": 1000012}, {"tx": "44b497f1c7339f418d1b791669d5e7688ee8becc0271d4d0499b71a487eb9e96", "kind": "AccessRevoked", "key": "d992583aa5c3d865e83f3a00ec497c83fc87ec74c408b0e97f492c1deb915cff", "block": 1000013}, {"tx": "4690f4352e2c25b5ca263ddd5ee84c439ada3dcf369a5f875997a7cf6d05df05", "kind": "RecordRegistered", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000014}, {"tx": "08eab06cc77b73af658f30187ee94330fa73d1da9fd099a16d9be246b3c8f4e6", "kind": "AccessGranted", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000015}, {"tx": "fb8e66b2dd4a3fa28620e6ed2c204249658ed31d96875c65f79577d01525874a", "kind": "AccessGranted", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000016}, {"tx": "4e3b6d744c77995d5307bee247bcb719017373ddac37e26f9972a09086e6909a", "kind": "AccessGranted", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000017}, {"tx": "c2e8d965294dec7a077f75cc905caff68271fc0e54a9a93e85c2009f36a20ac6", "kind": "RecordUpdated", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000018}, {"tx": "88ca3b37a4e4d32f19a155350db16138bdff06a169205d0aefa533940e8bbe75", "kind": "RecordUpdated", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000019}, {"tx": "cb98e0c438513f3cdcafb7dbf2bbfbea57e670465426623a4c3154baf9e60595", "kind": "RecordUpdated", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000020}, {"tx": "70ea4dfa84fa5ecef0b415af53d8d23ce5106a02fe61119cd398d583f7281a4e", "kind": "RecordUpdated", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000021}, {"tx": "966bb9164ee359c16682c6f1011e16d4575887ecf3067391463448f490c55fe4", "kind": "RecordRegistered", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000022}, {"tx": "022f05db7581044c058d75230446b302ea2335ec4755a37f0ca35e01fe7e23f4", "kind": "AccessGranted", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000023}, {"tx": "150efe3b01d158cdf7f09cbe469ce4eeb91b1801761626e9744dfbd56d609ab9", "kind": "AccessGranted", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000024}, {"tx": "b74cd70301e3d521941c9842f7c97e11225660ddf305727d76bfbca9c088fc59", "kind": "AccessGranted", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000025}, {"tx": "33b8c304b7e56543c6c5523a055ef0b049d54312fd90ae3f6925d7c9493d22df", "kind": "RecordUpdated", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000026}, {"tx": "c787a9b993aa9d96aedaa0f5469f8731650ad6949557160a5d5d3a5c6a766757", "kind": "RecordUpdated", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000027}, {"tx": "3c9e478747ef01c28c8cab5439ffe948b8fa322d53ab990458231f6aef94cacb", "kind": "RecordRegistered", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000028}, {"tx": "1bd2ab6be4f37b152305df81304fe79394773987b0c2778463f02d74901e1344", "kind": "AccessGranted", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000029}, {"tx": "391d739a2cc8945a99a40099aec0e2a30c690f75789958d381d329c3b7a828b3", "kind": "AccessGranted", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000030}, {"tx": "7c5b5aa4e3c929db828fd5eac0a1c1e993b84e488932710ed23c7fc25b172fbf", "kind": "AccessGranted", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000031}, {"tx": "e1ea793d6255fe4500a72a00f00bfa2d1cedf723aff9be6e944091aa871c8a71", "kind": "AccessLogged", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000032}, {"tx": "9d9d13eb35b18baa89dffbc3c16ff80af00107bcd7e6ee7bc7610f69fff354b8", "kind": "AccessLogged", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000033}, {"tx": "fced5dbc132f66087b74f2c6e2a390ecf195f08a3dd41a237d14b2ef35b539da", "kind": "AccessLogged", "key": "a4359af53f1bea0031c2f632268ac0e78f567ed87aa2bee42bc9810a821c5242", "block": 1000034}, {"tx": "dd4ca11c796cc6546279d75f2e12813bbbc2f2448041328bf749aadcb4d9357d", "kind": "AccessLogged", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000035}, {"tx": "75ee62cbe4dc7616c6e95dcd5fca8ef910ebecdf66af480d7bf48f2ce1905ff9", "kind": "AccessLogged", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000036}, {"tx": "88f561b6d21696cfef1f8223d9b9272b507d5115f7858338bd4761bcbeab71fe", "kind": "AccessLogged", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000037}, {"tx": "c5c01b5c2a6ed1a7750a25f029bafa0aff42466949d37d3132f0f676633c3296", "kind": "AccessLogged", "key": "3a3a95d830244fea5b1b25d958751fabf0e026e2f3f207c1a169834f56f47cd3", "block": 1000038}, {"tx": "3e8cdb623953a90db178b13a3e41f2c8549802ac3f110381bbe3fb76fe9517a8", "kind": "AccessLogged", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000039}, {"tx": "c6324ff2808cc7eecb38c518ae139dd4d93474835f0459fce73255967e83259d", "kind": "AccessLogged", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000040}, {"tx": "b49ff7c14a2ab2b13f40b87a2c019c9face0e070557324cd9685e80e81181c97", "kind": "AccessLogged", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000041}, {"tx": "c607f93945b8e30bd329a64f28917fad4f4ed2f3968dc2ef29d0cf7ff3435fb0", "kind": "AccessLogged", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000042}, {"tx": "9e1337b15fb706d4e92811baeebad5ff466a0601b63112773f33b8dc2bc8307a", "kind": "RecordUpdated", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000043}, {"tx": "d85c9feb570e5d58011e2cc21163bd3d860ad53bb380163df9dd8f9d08f789f5", "kind": "AccessLogged", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000044}, {"tx": "f374ac2a215c30c48f6c78dd3c58d49316f3f09a2684a67303cfedfdc90119d7", "kind": "RecordUpdated", "key": "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17", "block": 1000045}], "accesses": {"029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17:b2318c2ca379c63c644ad32dfbc0ccb6bfa8ee62575c8366869d0446c7d865e5": true, "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17:dcfc86d85950ead21b45af4531e5b19d897e745aa3af0a43f17af1c70ada3e6d": true, "029f53904a30959d0ad123015384191e08b152eb03df5fb5924c909b9a570c17:1d3328829fe5de60ef18774245706e1b39b45975dc100e65b1d016843940cfe5": true}}

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MediChain – Simulasi Dasbor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{--bg:#f2f5f4;--sf:#fff;--ink:#142b2e;--mut:#5b6f71;--line:#d5dfdd;--ac:#0b7a71;--acs:#d9efec;--ok:#17794a;--oks:#dcf1e5;--bad:#b42318;--bads:#fde4e1;color-scheme:light;
+font-family:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1c1e;--sf:#15282b;--ink:#e3eeed;--mut:#93a9ab;--line:#27403f;--ac:#4fd1c5;--acs:#173a3a;--ok:#5fd394;--oks:#12361f;--bad:#ff8a80;--bads:#3d1714;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1c1e;--sf:#15282b;--ink:#e3eeed;--mut:#93a9ab;--line:#27403f;--ac:#4fd1c5;--acs:#173a3a;--ok:#5fd394;--oks:#12361f;--bad:#ff8a80;--bads:#3d1714;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55}
+button,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--sf);border-bottom:1px solid var(--line)}
+.brand b{font-size:20px;letter-spacing:-.01em}.brand span{display:block;font-size:12.5px;color:var(--mut)}
+.hr{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px}
+.hr label{color:var(--mut)}
+select{background:var(--sf);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+#pill{background:var(--acs);color:var(--ac);border-radius:99px;padding:3px 10px;font-weight:600;font-size:12.5px}
+.app{display:grid;grid-template-columns:190px 1fr;gap:20px;max-width:1120px;margin:0 auto;padding:20px}
+nav{display:flex;flex-direction:column;gap:4px}
+nav button{text-align:left;background:none;border:0;border-left:3px solid transparent;padding:9px 12px;border-radius:0 6px 6px 0;cursor:pointer;color:var(--mut)}
+nav button:hover{background:var(--acs)}
+nav button[aria-current=true]{border-left-color:var(--ac);background:var(--acs);color:var(--ink);font-weight:600}
+.flow{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;color:var(--mut);margin:0 0 16px;padding:0;list-style:none;counter-reset:s}
+.flow li{counter-increment:s}.flow li::before{content:counter(s)".";margin-right:5px;font-weight:700;color:var(--ac)}
+.flow button{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+h2{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}.sub{color:var(--mut);margin:0 0 16px;max-width:68ch}
+.card{background:var(--sf);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.split{display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start}
+.list{display:flex;flex-direction:column;gap:8px}
+.pt{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;background:var(--sf);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer}
+.pt.on{border-color:var(--ac);box-shadow:inset 3px 0 0 var(--ac)}
+.pt span{color:var(--mut);font-size:13px}
+.b{display:inline-block;border-radius:99px;padding:1px 9px;font-size:12.5px;font-weight:600}
+.b.ok{background:var(--oks);color:var(--ok)}.b.bad{background:var(--bads);color:var(--bad)}.b.n{background:var(--line);color:var(--mut)}
+dl{display:grid;grid-template-columns:120px 1fr;gap:8px 14px;margin:0}dt{color:var(--mut)}dd{margin:0}
+textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;min-height:60px;resize:vertical}
+.btn{background:var(--ac);color:var(--sf);border:0;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer}
+.btn.alt{background:none;color:var(--ink);border:1px solid var(--line)}.btn.red{background:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+canvas{width:100%;height:260px;display:block;border:1px solid var(--line);border-radius:8px}
+.ctl{display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:var(--mut);margin-top:10px}.ctl input{vertical-align:middle}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.hash{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;padding:6px 8px;background:var(--bg);border-radius:6px;border:1px solid var(--line)}
+.hash.x{border-color:var(--bad);background:var(--bads);color:var(--bad)}.hash.v{border-color:var(--ok)}
+.lab{font-size:12.5px;color:var(--mut);margin:10px 0 3px}
+.ban{border-radius:10px;padding:14px 18px;font-weight:700;font-size:18px;margin-bottom:16px}
+.ban.ok{background:var(--oks);color:var(--ok)}.ban.bad{background:var(--bads);color:var(--bad)}
+.ban small{display:block;font-weight:400;font-size:14px;color:var(--ink)}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600}
+.tg{border:1px solid var(--line);background:none;border-radius:6px;padding:4px 10px;cursor:pointer}
+.tg.on{background:var(--oks);color:var(--ok);border-color:var(--ok)}.tg.off{background:var(--bads);color:var(--bad);border-color:var(--bad)}
+.diff{background:var(--bads);color:var(--bad);padding:1px 4px;border-radius:3px}
+.note{font-size:12.5px;color:var(--mut);max-width:1120px;margin:0 auto;padding:0 20px 24px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:5}
+#toast.on{opacity:1}
+@media (max-width:760px){.app{grid-template-columns:1fr;padding:14px}nav{flex-direction:row;overflow-x:auto}nav button{white-space:nowrap;border-left:0;border-bottom:3px solid transparent;border-radius:6px 6px 0 0}nav button[aria-current=true]{border-bottom-color:var(--ac)}.split,.cmp{grid-template-columns:1fr}dl{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>MediChain</b><span>Simulasi dasbor rekam medis berbasis blockchain · IEIC 2026 IT Healthcare</span></div>
+  <div class="hr"><label for="role">Masuk sebagai</label>
+    <select id="role" onchange="role=this.value;render()"><option>admin</option><option selected>dokter</option><option>pasien</option><option>auditor</option></select>
+    <span id="pill">Memuat…</span></div>
+</header>
+<div class="app">
+  <nav aria-label="Menu">
+    <button data-v="rm" onclick="go('rm')">Rekam Medis</button>
+    <button data-v="ecg" onclick="go('ecg')">Visualisasi ECG</button>
+    <button data-v="int" onclick="go('int')">Cek Integritas</button>
+    <button data-v="acl" onclick="go('acl')">Kontrol Akses</button>
+    <button data-v="aud" onclick="go('aud')">Audit Trail</button>
+    <button data-v="tmp" onclick="go('tmp')">Simulasi Tampering</button>
+  </nav>
+  <main>
+    <ol class="flow" aria-label="Alur demo"><li><button onclick="go('ecg')">Buka rekam dan ECG pasien</button></li><li><button onclick="go('tmp')">Ubah data di PostgreSQL</button></li><li><button onclick="go('int')">Verifikasi dan lihat hasilnya</button></li></ol>
+    <div id="main">Memuat data sintetis dan mencatat hash ke ledger…</div>
+  </main>
+</div>
+<p class="note">Simulasi front end untuk keperluan presentasi. Data pasien bersifat sintetis, sinyal ECG dibangkitkan secara sintetis sebagai pengganti segmen MIT-BIH, hash SHA-256 dihitung sungguhan di browser, sedangkan blockchain disimulasikan di memori (belum terhubung ke Ethereum testnet).</p>
+<div id="toast" role="status"></div>
+<script>
+const $=s=>document.querySelector(s),enc=new TextEncoder();
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const now=()=>new Date().toLocaleTimeString('id-ID');
+async function sha(s){const b=await crypto.subtle.digest('SHA-256',enc.encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+const sh=h=>'0x'+h.slice(0,8)+'…'+h.slice(-6);
+const g=(x,m,w,a)=>a*Math.exp(-((x-m)**2)/(2*w*w));
+function ecgGen(seed,hr,irr){const fs=250,N=fs*8,r0=60/hr,b=[];let t=.2,k=0;
+  while(t<9){const r=r0*(1+(irr?.35*Math.sin(k*2.3+seed)*Math.cos(k*1.1):0));b.push([t,r]);t+=r;k++}
+  const s=[];let j=0;
+  for(let i=0;i<N;i++){const x=i/fs;while(j<b.length-1&&b[j+1][0]<=x)j++;const p=(x-b[j][0])/b[j][1];
+    s.push(+(g(p,.2,.035,irr?0:.14)+g(p,.34,.009,-.14)+g(p,.37,.011,1.15)+g(p,.4,.012,-.28)+g(p,.62,.06,.32)+.025*Math.sin(i*.9+seed)+.015*Math.sin(x*2.1)).toFixed(3))}
+  return s}
+const P=[
+ {id:'PSN-001',nama:'Pasien Sintetis 01',usia:54,jk:'L',riwayat:'Hipertensi sejak 2019',dx:'Atrial fibrilasi paroksismal',cat:'Kontrol 2 minggu. Pantau tekanan darah harian.',hr:84,seed:3,irr:1},
+ {id:'PSN-002',nama:'Pasien Sintetis 02',usia:41,jk:'P',riwayat:'Tidak ada riwayat penyakit jantung',dx:'Irama sinus normal',cat:'Pemeriksaan rutin. Tidak ada keluhan.',hr:68,seed:5,irr:0},
+ {id:'PSN-003',nama:'Pasien Sintetis 03',usia:67,jk:'L',riwayat:'Diabetes tipe 2, dislipidemia',dx:'Takikardia sinus',cat:'Evaluasi obat. Anjurkan aktivitas ringan.',hr:104,seed:7,irr:0}];
+const canon=p=>JSON.stringify([p.id,p.usia,p.jk,p.riwayat,p.dx,p.cat]);
+let role='dokter',view='rm',sel='PSN-001',st={},win={s:0,d:5},chain=[],audit=[],sc={rec:{},acl:{}},orig={};
+async function addTx(type,id,d={}){const ts=now(),prev=chain.length?chain[chain.length-1].tx:'0'.repeat(64);
+  const tx=await sha(prev+type+id+JSON.stringify(d)+ts+chain.length);
+  chain.push({tx,blk:4812300+chain.length*3,type,id,ts});
+  audit.push({ts,src:'Event kontrak',ev:type,id,role:d.by||role,note:d.note||'',tx});return chain[chain.length-1]}
+const logDb=(ev,id,note)=>audit.push({ts:now(),src:'Log DB',ev,id,role,note,tx:''});
+const can=(id,a)=>a==='write'?role==='dokter'&&sc.acl[id].dokter:(role==='admin'||(sc.acl[id][role]&&(role!=='pasien'||id==='PSN-001')));
+const cur=()=>P.find(x=>x.id===sel);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),3200)}
+async function init(){
+  for(const p of P){p.ecg=ecgGen(p.seed,p.hr,p.irr);
+    const hr=await sha(canon(p)),he=await sha(p.ecg.join(','));
+    sc.rec[p.id]={hr,he,ver:1};sc.acl[p.id]={dokter:true,pasien:p.id==='PSN-001',auditor:true};
+    logDb('INSERT',p.id,'Rekam dan biosignal disimpan di PostgreSQL');
+    const t=await addTx('RecordRegistered',p.id,{by:'dokter',hr,he});sc.rec[p.id].tx=t.tx;sc.rec[p.id].blk=t.blk;sc.rec[p.id].ts=t.ts;
+    orig[p.id]={rec:{...p},ecg:[...p.ecg]}}
+  render()}
+const badge=id=>{const s=st[id];return s===undefined?'<span class="b n">Belum diverifikasi</span>':s.ok?'<span class="b ok">✓ Valid</span>':'<span class="b bad">⚠ Termodifikasi</span>'};
+const lockMsg=()=>`<div class="card"><b>Akses ditolak.</b><p>Peran <b>${role}</b> tidak memiliki izin membaca ${sel}. Percobaan ini dicatat sebagai event AccessLogged pada smart contract (lihat Audit Trail).</p></div>`;
+const psel=()=>`<div class="row"><label for="ps">Pasien</label><select id="ps" onchange="pick(this.value)">${P.map(x=>`<option ${x.id===sel?'selected':''}>${x.id}</option>`).join('')}</select>${badge(sel)}</div>`;
+const head=(t,s)=>`<h2>${t}</h2><p class="sub">${s}</p>`;
+function pick(id){sel=id;if(!can(id,'read'))addTx('AccessLogged',id,{by:role,note:'Akses baca ditolak'}).then(render);render()}
+function go(v){view=v;render()}
+async function verify(id){const p=P.find(x=>x.id===id),r=sc.rec[id];
+  const hr=await sha(canon(p)),he=await sha(p.ecg.join(','));
+  st[id]={ok:hr===r.hr&&he===r.he,rec:hr===r.hr,ecg:he===r.he,hr,he,ts:now()};
+  logDb('verifyRecord',id,st[id].ok?'Hasil: valid':'Hasil: termodifikasi ('+[!st[id].rec&&'rekam',!st[id].ecg&&'ECG'].filter(Boolean).join(' + ')+')')}
+async function doV(all){if(all){for(const p of P)if(can(p.id,'read'))await verify(p.id)}else await verify(sel);render()}
+async function save(){if(!can(sel,'write'))return;const p=cur();p.dx=$('#e-dx').value.trim()||p.dx;p.cat=$('#e-cat').value.trim()||p.cat;
+  const r=sc.rec[sel];r.hr=await sha(canon(p));r.ver++;
+  const t=await addTx('RecordUpdated',sel,{by:role,hr:r.hr,ver:r.ver});r.tx=t.tx;r.blk=t.blk;r.ts=t.ts;
+  logDb('UPDATE',sel,'Pembaruan sah melalui API');orig[sel].rec={...p};st[sel]=undefined;render();toast('Versi '+r.ver+' tercatat on-chain. Jalankan verifikasi untuk memeriksa.')}
+async function tog(id,rl){if(role!=='admin')return;const a=sc.acl[id];a[rl]=!a[rl];await addTx(a[rl]?'AccessGranted':'AccessRevoked',id,{by:'admin',note:'Peran '+rl});render()}
+function tamper(k){const p=cur();
+  if(k==='dx')p.dx='Tidak ada kelainan jantung';
+  if(k==='cat')p.cat='Obat dihentikan. Tidak perlu kontrol ulang.';
+  if(k==='ecg')for(let i=500;i<520;i++)p.ecg[i]=+(1.5-(i-500)*.02).toFixed(3);
+  logDb('TAMPERING',sel,'Simulasi: data diubah langsung di PostgreSQL tanpa melalui smart contract');st[sel]=undefined;render();toast('Data PostgreSQL berubah. Smart contract tidak ikut berubah.')}
+function restore(){const o=orig[sel],p=cur();Object.assign(p,o.rec);p.ecg=[...o.ecg];logDb('RESTORE',sel,'Data dipulihkan ke versi sah terakhir');st[sel]=undefined;render();toast('Data dipulihkan.')}
+const V={
+rm(){const p=cur(),w=can(sel,'write');
+ return head('Rekam Medis Terintegrasi','Rekam sintetis dengan identitas pseudonim. Data lengkap ada di PostgreSQL, hanya hash yang dicatat di blockchain.')+
+ `<div class="split"><div class="list">${P.map(x=>`<button class="pt ${x.id===sel?'on':''}" onclick="pick('${x.id}')"><b>${x.id}</b><span>${x.nama}, ${x.usia} th</span>${badge(x.id)}</button>`).join('')}</div>`+
+ (can(sel,'read')?`<div class="card"><dl><dt>Pengenal</dt><dd>${p.id} (${p.jk==='L'?'laki-laki':'perempuan'}, ${p.usia} tahun)</dd><dt>Riwayat</dt><dd>${esc(p.riwayat)}</dd><dt>Diagnosis</dt><dd>${w?`<textarea id="e-dx" aria-label="Diagnosis">${esc(p.dx)}</textarea>`:esc(p.dx)}</dd><dt>Catatan klinis</dt><dd>${w?`<textarea id="e-cat" aria-label="Catatan klinis">${esc(p.cat)}</textarea>`:esc(p.cat)}</dd><dt>Versi on-chain</dt><dd>v${sc.rec[sel].ver} · blok ${sc.rec[sel].blk}</dd></dl>
+ <div class="row">${w?`<button class="btn" onclick="save()">Simpan sebagai versi baru</button>`:`<span class="sub" style="margin:0">Hanya peran dokter yang dapat mengubah rekam.</span>`}<button class="btn alt" onclick="go('ecg')">Lihat ECG</button></div></div>`:lockMsg())+`</div>`},
+ecg(){if(!can(sel,'read'))return head('Visualisasi ECG','')+psel()+lockMsg();const s=st[sel];
+ return head('Visualisasi ECG','Sinyal sintetis 250 Hz selama 8 detik. Geser untuk memilih rentang waktu; tanda R menunjukkan puncak gelombang QRS.')+psel()+
+ `<div class="card"><canvas id="cv" role="img" aria-label="Grafik sinyal ECG ${sel}"></canvas>
+ <div class="ctl"><label>Mulai <input type="range" min="0" max="6" step=".5" value="${win.s}" oninput="win.s=+this.value;this.nextElementSibling.textContent=win.s+' s';draw()"> <output>${win.s} s</output></label>
+ <label>Durasi <input type="range" min="2" max="8" step=".5" value="${win.d}" oninput="win.d=+this.value;this.nextElementSibling.textContent=win.d+' s';draw()"> <output>${win.d} s</output></label></div>
+ <div class="row"><span>Status biosignal: ${s===undefined?'<span class="b n">Belum diverifikasi</span>':s.ecg?'<span class="b ok">✓ Sesuai hash on-chain</span>':'<span class="b bad">⚠ Tidak sesuai hash on-chain</span>'}</span><button class="btn alt" onclick="doV()">Verifikasi ECG</button></div></div>`},
+int(){if(!can(sel,'read'))return head('Cek Integritas','')+psel()+lockMsg();const s=st[sel],r=sc.rec[sel];
+ const cell=(a,b)=>!s?'':a===b?' v':' x';
+ return head('Cek Integritas','SHA-256 dihitung ulang dari data di PostgreSQL, lalu dibandingkan dengan hash yang tercatat di smart contract.')+
+ `<div class="row"><label for="ps">Pasien</label><select id="ps" onchange="pick(this.value)">${P.map(x=>`<option ${x.id===sel?'selected':''}>${x.id}</option>`).join('')}</select><button class="btn" onclick="doV()">Verifikasi sekarang</button><button class="btn alt" onclick="doV(true)">Verifikasi semua pasien</button></div>`+
+ (s?`<div class="ban ${s.ok?'ok':'bad'}">${s.ok?'✓ Valid':'⚠ Termodifikasi'}<small>${s.ok?'Hash PostgreSQL sama dengan hash on-chain. Data tidak berubah sejak dicatat.':'Hash tidak cocok pada '+[!s.rec&&'rekam medis',!s.ecg&&'biosignal ECG'].filter(Boolean).join(' dan ')+'. Data di PostgreSQL berbeda dari yang dicatat di smart contract.'} (dicek ${s.ts})</small></div>`:'')+
+ `<div class="cmp"><div class="card"><b>PostgreSQL (off-chain)</b><div class="lab">Hash rekam medis, dihitung ulang</div><div class="hash${cell(s&&s.hr,r.hr)}">${s?s.hr:'Belum dihitung'}</div><div class="lab">Hash biosignal ECG, dihitung ulang</div><div class="hash${cell(s&&s.he,r.he)}">${s?s.he:'Belum dihitung'}</div></div>
+ <div class="card"><b>Smart contract (on-chain)</b><div class="lab">Hash rekam medis tercatat</div><div class="hash">${r.hr}</div><div class="lab">Hash biosignal ECG tercatat</div><div class="hash">${r.he}</div><div class="lab">Versi ${r.ver} · transaksi ${sh(r.tx)} · blok ${r.blk} · ${r.ts}</div></div></div>`+
+ `<div class="card tw"><table><tr><th>Pasien</th><th>Status terakhir</th><th>Dicek</th></tr>${P.map(x=>`<tr><td>${x.id}</td><td>${badge(x.id)}</td><td>${st[x.id]?st[x.id].ts:'-'}</td></tr>`).join('')}</table></div>`},
+acl(){const adm=role==='admin';
+ return head('Kontrol Akses','Hak akses berbasis peran, dicatat sebagai event AccessGranted dan AccessRevoked. Admin selalu dapat membaca dan mengelola izin.')+
+ `<div class="card tw"><table><tr><th>Rekam</th><th>Dokter</th><th>Pasien</th><th>Auditor</th></tr>${P.map(x=>`<tr><td>${x.id}</td>${['dokter','pasien','auditor'].map(r=>`<td><button class="tg ${sc.acl[x.id][r]?'on':'off'}" ${adm?'':'disabled'} onclick="tog('${x.id}','${r}')">${sc.acl[x.id][r]?'Diizinkan':'Dicabut'}</button></td>`).join('')}</tr>`).join('')}</table></div>
+ <p class="sub">${adm?'Ubah izin lalu pindah ke peran lain di kanan atas untuk melihat dampaknya.':'Ganti peran ke admin untuk mengubah izin. Peran pasien hanya dapat membuka PSN-001, dan percobaan di luar izin tercatat di Audit Trail.'}</p>`},
+aud(){return head('Audit Trail','Gabungan log basis data dan event smart contract, diurutkan dari yang terbaru.')+
+ `<div class="card tw"><table><tr><th>Waktu</th><th>Sumber</th><th>Kejadian</th><th>Rekam</th><th>Peran</th><th>Keterangan</th></tr>${[...audit].reverse().map(a=>`<tr><td>${a.ts}</td><td>${a.src}</td><td><b>${a.ev}</b></td><td>${a.id}</td><td>${a.role}</td><td>${esc(a.note)}${a.tx?` <span class="hash" style="padding:0 4px">${sh(a.tx)}</span>`:''}</td></tr>`).join('')}</table></div>`},
+tmp(){const p=cur(),o=orig[sel],d=(a,b)=>a===b?esc(a):`<span class="diff">${esc(a)}</span>`,chg=canon(p)!==canon(o.rec)||p.ecg.join()!==o.ecg.join();
+ return head('Simulasi Tampering','Bayangkan pihak yang punya akses langsung ke PostgreSQL mengubah data tanpa melewati API. Smart contract tidak ikut berubah, sehingga selisihnya akan terdeteksi.')+psel()+
+ `<div class="card"><dl><dt>Diagnosis</dt><dd>${d(p.dx,o.rec.dx)}</dd><dt>Catatan klinis</dt><dd>${d(p.cat,o.rec.cat)}</dd><dt>Sinyal ECG</dt><dd>${p.ecg.join()===o.ecg.join()?'Tidak berubah':'<span class="diff">Ada sampel yang diubah (2,0–2,1 detik)</span>'}</dd></dl>
+ <div class="row"><button class="btn red" onclick="tamper('dx')">Ubah diagnosis</button><button class="btn red" onclick="tamper('cat')">Ubah catatan klinis</button><button class="btn red" onclick="tamper('ecg')">Sisipkan lonjakan di ECG</button></div>
+ <div class="row"><button class="btn" onclick="go('int');doV()">Jalankan verifikasi</button><button class="btn alt" ${chg?'':'disabled'} onclick="restore()">Pulihkan data asli</button></div></div>`}};
+function draw(){const c=$('#cv');if(!c)return;const p=cur(),cs=getComputedStyle(document.documentElement),col=n=>cs.getPropertyValue(n).trim();
+  const w=c.clientWidth,h=260,d=devicePixelRatio||1;c.width=w*d;c.height=h*d;const x=c.getContext('2d');x.scale(d,d);
+  x.fillStyle=col('--sf');x.fillRect(0,0,w,h);
+  const fs=250,a=Math.floor(win.s*fs),e=Math.min(p.ecg.length,a+Math.floor(win.d*fs)),X=i=>(i-a)/(e-a)*w,Y=v=>h*.78-v*h*.42;
+  x.lineWidth=1;x.strokeStyle=col('--line');x.fillStyle=col('--mut');x.font='11px sans-serif';
+  for(let i=a;i<e;i+=50){x.beginPath();x.moveTo(X(i),0);x.lineTo(X(i),h);x.stroke();if((i%250)===0)x.fillText((i/fs)+' s',X(i)+3,h-5)}
+  x.strokeStyle=col('--ac');x.lineWidth=1.6;x.beginPath();
+  for(let i=a;i<e;i++){i===a?x.moveTo(X(i),Y(p.ecg[i])):x.lineTo(X(i),Y(p.ecg[i]))}x.stroke();
+  x.fillStyle=col('--ink');let last=-99;
+  for(let i=Math.max(a,1);i<e-1;i++){const v=p.ecg[i];if(v>.8&&v>=p.ecg[i-1]&&v>=p.ecg[i+1]&&i-last>40){last=i;x.beginPath();x.arc(X(i),Y(v)-8,2.5,0,7);x.fill();x.fillText('R',X(i)-3,Y(v)-14)}}}
+function render(){document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.v===view));
+  if(!chain.length)return;const l=chain[chain.length-1];$('#pill').textContent='Testnet simulasi · blok '+l.blk+' · '+chain.length+' tx';
+  $('#main').innerHTML=V[view]();if(view==='ecg')draw()}
+addEventListener('resize',draw);
+init();
+</script>
+</body>
+</html>
